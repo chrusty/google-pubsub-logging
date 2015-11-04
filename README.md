@@ -34,3 +34,8 @@ This data-flow subscribes to a PUB/SUB topic, converts each message into a BigQu
 --streaming=true
 --numWorkers=1
 --maxNumWorkers=2
+
+### ToDo:
+* Rotate BigQuery tables at midnight
+* Give the PUB/SUB subscription a more descriptive name
+* Get the time field stored as a proper bigquery "TIMESTAMP" type
