@@ -3,6 +3,11 @@ package org.chrusty.dataflow.logging.bigquery;
 import java.util.List;
 import java.util.ArrayList;
 
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +34,8 @@ import com.google.cloud.dataflow.sdk.values.PCollection;
 
 public class DataFlowLoggingPubSubToBigQuery {
     private static final Logger LOG = LoggerFactory.getLogger(DataFlowLoggingPubSubToBigQuery.class);
-
+  private static JSONParser jsonParser = new JSONParser();
+    
     // Options:
     public static interface DataFlowLoggingOptions extends DataflowPipelineOptions {
       @Description("Pub/Sub topic")
@@ -52,14 +58,27 @@ public class DataFlowLoggingPubSubToBigQuery {
   static class FormatAsTableRowFn extends DoFn<String, TableRow> {
     @Override
     public void processElement(ProcessContext c) {
-      TableRow row = new TableRow()
-          .set("time", "1")
-          .set("host", "some-host")
-          .set("ident", "syslog")
-          .set("environment", "cruft")
-          .set("role", "prawn")
-          .set("message", c.element());
-      c.output(row);
+      JSONObject jsonMessage = null;
+      try {
+        // Parse the context as a JSON object:
+        jsonMessage = (JSONObject) jsonParser.parse(c.element());
+
+        // Make a BigQuery row from the JSON object:
+        TableRow row = new TableRow()
+            .set("time", jsonMessage.get("time"))
+            .set("host", jsonMessage.get("host"))
+            .set("ident",jsonMessage.get("ident"))
+            .set("environment", jsonMessage.get("environment"))
+            .set("role", jsonMessage.get("role"))
+            .set("message", jsonMessage.get("message"));
+
+        // Output the row:
+        c.output(row);
+      } catch (ParseException e) {
+        LOG.warn(String.format("Exception encountered parsing JSON (%s) ...", e));
+      } catch (Exception e) {
+        LOG.warn(String.format("Exception: %s", e));
+      }
     }
     }
 
@@ -101,7 +120,10 @@ public class DataFlowLoggingPubSubToBigQuery {
       // Write to BigQuery:
       LOG.info(String.format("Writing to BigQuery (%s:%s) ...", options.getBigQueryDataset(), options.getBigQueryTable()));
       input.apply(ParDo.of(new FormatAsTableRowFn()))
-      .apply(BigQueryIO.Write.to(getTableReference(options)).withSchema(getSchema()));
+        .apply(BigQueryIO.Write.to(getTableReference(options))
+          .withSchema(getSchema())
+            .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
+              .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
       
       // Run the pipeline:
       pipeline.run();
