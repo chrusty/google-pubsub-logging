@@ -1,4 +1,4 @@
-package org.chrusty.dataflow.logging.cloudstorage;
+package org.chrusty.dataflow.logging.bigquery;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -13,14 +13,12 @@ import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.io.BigQueryIO;
 import com.google.cloud.dataflow.sdk.io.PubsubIO;
-import com.google.cloud.dataflow.sdk.io.TextIO;
+import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
 import com.google.cloud.dataflow.sdk.options.Default;
 import com.google.cloud.dataflow.sdk.options.Description;
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
-import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollection;
 
 /*
@@ -30,42 +28,49 @@ import com.google.cloud.dataflow.sdk.values.PCollection;
 */
 
 public class DataFlowLoggingPubSubToBigQuery {
-    private static final Logger LOG = LoggerFactory.getLogger(DataFlowLoggingPubSubToCloudStorage.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DataFlowLoggingPubSubToBigQuery.class);
 
     // Options:
-    public static interface DataFlowLoggingOptions extends PipelineOptions {
+    public static interface DataFlowLoggingOptions extends DataflowPipelineOptions {
       @Description("Pub/Sub topic")
       @Default.String("projects/PROJECT/topics/TOPIC")
       String getPubsubTopic();
       void setPubsubTopic(String topic);
+      
+      @Description("BigQuery dataset name")
+      @Default.String("logs")
+      String getBigQueryDataset();
+      void setBigQueryDataset(String dataset);
 
-      @Description("Path of the cloud-storage bucket to write to")
-      @Default.String("gs://bucket/logs")
-      String getOutput();
-      void setOutput(String value);
+      @Description("BigQuery table name")
+      @Default.String("1970_01_01")
+      String getBigQueryTable();
+      void setBigQueryTable(String table);
     }
     
     // A DoFn that converts a logging-message into a BigQuery table row:
-    static class FormatAsTableRowFn extends DoFn<KV<String, Long>, TableRow> {
-      @Override
-      public void processElement(ProcessContext c) {
-        TableRow row = new TableRow()
-            .set("word", c.element().getKey())
-            .set("count", c.element().getValue())
-            // include a field for the window timestamp
-           .set("window_timestamp", c.timestamp().toString());
-        c.output(row);
-      }
+  static class FormatAsTableRowFn extends DoFn<String, TableRow> {
+    @Override
+    public void processElement(ProcessContext c) {
+      TableRow row = new TableRow()
+          .set("time", "1")
+          .set("host", "some-host")
+          .set("ident", "syslog")
+          .set("environment", "cruft")
+          .set("role", "prawn")
+          .set("message", c.element());
+      c.output(row);
+    }
     }
 
     // Return a reference to a BigQuery table:
     private static TableReference getTableReference(DataFlowLoggingOptions options) {
         TableReference tableRef = new TableReference();
-        tableRef.setProjectId("PROJECT");
-        tableRef.setDatasetId("centralised-logs");
-        tableRef.setTableId("logs");
+        tableRef.setProjectId(options.getProject());
+        tableRef.setDatasetId(options.getBigQueryDataset());
+        tableRef.setTableId(options.getBigQueryTable());
         return tableRef;
-    }
+  }
 
     // Return a BigQuery table-schema:
     private static TableSchema getSchema() {
@@ -90,10 +95,11 @@ public class DataFlowLoggingPubSubToBigQuery {
       Pipeline pipeline = Pipeline.create(options);
 
       // Get input from a Pub/Sub topic:
-      LOG.info("Reading from PubSub ...");      
-      PCollection<String> input = pipeline.apply( PubsubIO.Read.topic( options.getPubsubTopic() ) );
+      LOG.info(String.format("Reading from PubSub topic (%s) ...", options.getPubsubTopic()));
+      PCollection<String> input = pipeline.apply(PubsubIO.Read.topic(options.getPubsubTopic()));
 
       // Write to BigQuery:
+      LOG.info(String.format("Writing to BigQuery (%s:%s) ...", options.getBigQueryDataset(), options.getBigQueryTable()));
       input.apply(ParDo.of(new FormatAsTableRowFn()))
       .apply(BigQueryIO.Write.to(getTableReference(options)).withSchema(getSchema()));
       
