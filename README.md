@@ -23,14 +23,14 @@ This data-flow subscribes to a PUB/SUB topic, converts each message into a BigQu
 * Give ownership on the "STAGING" bucket to the app-engine account
 
 ### Options:
---project=ravelin-logging
---stagingLocation=gs://ravelin-logging-us/logtobq/staging
+--project=logging
+--stagingLocation=gs://logging/logtobq/staging
 --runner=BlockingDataflowPipelineRunner
 --bigQueryDataset=logs
 --bigQueryTable=2015_11_04
---pubsubTopic=projects/ravelin-logging/topics/logs
+--pubsubTopic=projects/logging/topics/logs
 --jobName=logtobq
---tempLocation=gs://ravelin-logging-us/logtobq/temp
+--tempLocation=gs://logging/logtobq/temp
 --streaming=true
 --numWorkers=1
 --maxNumWorkers=2
