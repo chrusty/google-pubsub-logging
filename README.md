@@ -31,6 +31,7 @@ This data-flow subscribes to a PUB/SUB topic, converts each message into a BigQu
 * Give ownership on the "STAGING" bucket to the app-engine account
 
 ### Options:
+```
 --project=logging
 --stagingLocation=gs://logging/logtobq/staging
 --runner=BlockingDataflowPipelineRunner
@@ -43,6 +44,7 @@ This data-flow subscribes to a PUB/SUB topic, converts each message into a BigQu
 --streaming=true
 --numWorkers=1
 --maxNumWorkers=2
+```
 
 ### ToDo:
 * Give the PUB/SUB subscription a more descriptive name
