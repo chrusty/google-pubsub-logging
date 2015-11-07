@@ -1,6 +1,14 @@
 # Google PUB/SUB logging
 This project includes sample configurations for FluentD which will stream logs from your boxes onto Google's PUB/SUB, as well as a set of dataflows which can be used to process the messages once they're on PUB/SUB.
 
+## FluentD config:
+I've included sample configs for fluentd
+* It will tail 4 important syslog files (syslog, auth.log, kern.log, fail2ban.log)
+* It makes sure they have timestamp keys
+* It then uses the "time_parser" plugin to add proper timestamp field to messages ("parsed_time") which BigQuery can parse into a column of the correct type ("TIMESTMAP")
+* It then uses the "record-modifier" plugin to enrich messages (adding a "host" tag, an "environment" tag, and a "role" tag)
+* It then uses the "gcloud_pubsub" plugin to publish messages to PUB/SUB (where the data-flows take over)
+
 ## DataFlowLoggingPubSubToCloudStorage
 On the face of it this seems like the simplest data-flow, except for the following dilemma:
 * In order to read from PUB/SUB a dataflow needs to run in streaming mode
@@ -27,15 +35,14 @@ This data-flow subscribes to a PUB/SUB topic, converts each message into a BigQu
 --stagingLocation=gs://logging/logtobq/staging
 --runner=BlockingDataflowPipelineRunner
 --bigQueryDataset=logs
---bigQueryTable=2015_11_04
+--bigQueryTablePrefix=daily
+--splitTables=true
 --pubsubTopic=projects/logging/topics/logs
---jobName=logtobq
---tempLocation=gs://logging/logtobq/temp
+--jobName=logtobqdaily
+--tempLocation=gs://logging-us/logtobq/temp
 --streaming=true
 --numWorkers=1
 --maxNumWorkers=2
 
 ### ToDo:
-* Rotate BigQuery tables at midnight
 * Give the PUB/SUB subscription a more descriptive name
-* Get the time field stored as a proper bigquery "TIMESTAMP" type
