@@ -62,7 +62,7 @@ public class DataFlowLoggingPubSubToBigQuery {
     @Default.String("yyyyMMdd")
     String getBigQueryTableSuffix();
     void setBigQueryTableSuffix(String tablesuffix);
-    
+
     @Description("Split tables")
     @Default.Boolean(true)
     Boolean getSplitTables();
@@ -74,27 +74,43 @@ public class DataFlowLoggingPubSubToBigQuery {
     @Override
     public void processElement(ProcessContext c) {
       JSONObject jsonMessage = null;
+      TableRow row = null;
       try {
         // Parse the context as a JSON object:
         jsonMessage = (JSONObject) jsonParser.parse(c.element());
 
         // Make a BigQuery row from the JSON object:
-        TableRow row = new TableRow()
+        row = new TableRow()
             .set("time_stamp", jsonMessage.get("parsed_time"))
             .set("time_original", jsonMessage.get("time"))
             .set("host", jsonMessage.get("host"))
-            .set("ident",jsonMessage.get("ident"))
+            .set("ident", jsonMessage.get("ident"))
             .set("environment", jsonMessage.get("environment"))
             .set("role", jsonMessage.get("role"))
             .set("message", jsonMessage.get("message"));
 
-        // Output the row:
-        c.output(row);
       } catch (ParseException e) {
         LOG.warn(String.format("Exception encountered parsing JSON (%s) ...", e));
+
+        // Make a BigQuery row containing the exception:
+        row = new TableRow()
+            .set("host", "ParseException")
+            .set("environment", e.toString())
+            .set("ident", "Exception")
+            .set("message", c.element());
       } catch (Exception e) {
         LOG.warn(String.format("Exception: %s", e));
+
+        // Make a BigQuery row containing the exception:
+        row = new TableRow()
+            .set("host", "Exception")
+            .set("environment", e.toString())
+            .set("ident", "Exception")
+            .set("message", c.element());
       }
+
+      // Output the row:
+      c.output(row);
     }
   }
 
