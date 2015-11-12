@@ -39,7 +39,6 @@ import com.google.cloud.dataflow.sdk.values.PCollection;
 
 public class DataFlowLoggingPubSubToBigQuery {
   private static final Logger LOG = LoggerFactory.getLogger(DataFlowLoggingPubSubToBigQuery.class);
-  private static JSONParser jsonParser = new JSONParser();
 
   // Options:
   public static interface DataFlowLoggingOptions extends DataflowPipelineOptions {
@@ -70,11 +69,14 @@ public class DataFlowLoggingPubSubToBigQuery {
   }
 
   // A DoFn that converts a logging-message into a BigQuery table row:
+  @SuppressWarnings("serial")
   static class FormatAsTableRowFn extends DoFn<String, TableRow> {
     @Override
     public void processElement(ProcessContext c) {
+      JSONParser jsonParser = new JSONParser();
       JSONObject jsonMessage = null;
       TableRow row = null;
+
       try {
         // Parse the context as a JSON object:
         jsonMessage = (JSONObject) jsonParser.parse(c.element());
@@ -82,12 +84,12 @@ public class DataFlowLoggingPubSubToBigQuery {
         // Make a BigQuery row from the JSON object:
         row = new TableRow()
             .set("time_stamp", jsonMessage.get("parsed_time"))
-            .set("time_original", jsonMessage.get("time"))
-            .set("host", jsonMessage.get("host"))
-            .set("ident", jsonMessage.get("ident"))
-            .set("environment", jsonMessage.get("environment"))
-            .set("role", jsonMessage.get("role"))
-            .set("message", jsonMessage.get("message"));
+            .set("time_original", JSONObject.escape((String) jsonMessage.get("time")))
+            .set("host", JSONObject.escape((String) jsonMessage.get("host")))
+            .set("ident", JSONObject.escape((String) jsonMessage.get("ident")))
+            .set("environment", JSONObject.escape((String) jsonMessage.get("environment")))
+            .set("role", JSONObject.escape((String) jsonMessage.get("role")))
+            .set("message", JSONObject.escape((String) jsonMessage.get("message")));
 
       } catch (ParseException e) {
         LOG.warn(String.format("Exception encountered parsing JSON (%s) ...", e));
@@ -107,10 +109,10 @@ public class DataFlowLoggingPubSubToBigQuery {
             .set("environment", e.toString())
             .set("ident", "Exception")
             .set("message", c.element());
+      } finally {
+        // Output the row:
+        c.output(row);
       }
-
-      // Output the row:
-      c.output(row);
     }
   }
 
